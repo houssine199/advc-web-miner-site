@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <meta name="description" content="واجهة تعدين ADVC اختيارية وشفافة — لا يبدأ التعدين إلا بطلبك الصريح.">
+  <title>تعدين ADVC — تشغيل اختياري</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101820;--panel:#182630;--line:#304450;--text:#edf5f7;--muted:#adc0c8;--accent:#70e0bd;--warn:#ffd17a;--danger:#ff8f8f}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 75% 0,#203744 0,transparent 45%),var(--bg);color:var(--text);font:16px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{width:min(760px,calc(100% - 28px));margin:7vh auto}.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:clamp(22px,5vw,42px);box-shadow:0 18px 60px #0005}
+    h1{margin:.2em 0;font-size:clamp(1.8rem,5vw,2.6rem)}h2{font-size:1.1rem;margin:1.4em 0 .4em}p{color:var(--muted);margin:.5em 0}.pill{display:inline-block;border:1px solid #426255;border-radius:99px;padding:2px 12px;color:var(--accent);font-size:.9rem}
+    .notice{margin:20px 0;padding:16px;border:1px solid #806738;border-radius:12px;background:#3b301b;color:#ffe2a9}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:6px}label{font-weight:650}input[type=number]{width:100%;padding:11px;border-radius:9px;border:1px solid var(--line);background:#101820;color:var(--text);font:inherit}input[type=checkbox]{width:19px;height:19px;accent-color:var(--accent);vertical-align:middle;margin-left:8px}
+    .consent{margin:20px 0;padding:14px;border:1px solid var(--line);border-radius:12px}.buttons{display:flex;gap:10px;flex-wrap:wrap}button{font:inherit;font-weight:750;border:0;border-radius:10px;padding:11px 20px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.start{background:var(--accent);color:#092018}.stop{background:#503035;color:#ffe2e2}.status{margin-top:18px;padding:12px;border-radius:10px;background:#101820;color:var(--muted);overflow-wrap:anywhere}.status.active{color:var(--accent)}.status.error{color:var(--danger)}small{color:var(--muted)}a{color:var(--accent)}footer{margin-top:25px;font-size:.9rem;color:var(--muted)}
+    @media(max-width:560px){.grid{grid-template-columns:1fr}main{margin:3vh auto}}
+  </style>
+</head>
+<body>
+<main>
+  <section class="card" aria-labelledby="title">
+    <span class="pill">ADVC · yespower</span>
+    <h1 id="title">التعدين باختيارك فقط</h1>
+    <p>لن يبدأ التعدين عند فتح الصفحة. لن يتم تحميل وحدة التعدين إلا بعد تحديد الموافقة والضغط على زر البدء أدناه.</p>
+    <div class="notice"><strong>تنبيه قبل التشغيل:</strong> التعدين يستخدم معالج جهازك ويزيد استهلاك الكهرباء والحرارة، وقد يبطئ جهازك. تمر الاتصالات عبر خادم وسيط تابع لمطوّر المكتبة، ووفق README الخاص بها يحتفظ الوسيط بـ<strong>1% من الأسهم كرسوم</strong>. يمكنك إيقاف التعدين فورًا بالزر أدناه أو بإغلاق الصفحة.</div>
+    <h2>عنوان الدفع وإعداد التشغيل</h2>
+    <div class="grid">
+      <div class="field"><label for="wallet">عنوان محفظة ADVC (يُرسل إلى خدمة التعدين)</label><input id="wallet" type="text" dir="ltr" autocomplete="off" spellcheck="false" value="advc1qlde2z0nf3glqzsvse930f6shqrnj2ym57ft0y6"></div>
+      <div class="field"><label for="threads">عدد خيوط المعالج (المتاح: <span id="available">…</span>)</label><input id="threads" type="number" min="1" value="1" inputmode="numeric"></div>
+    </div>
+    <div class="consent"><label><input id="agree" type="checkbox">أفهم أثر التعدين على المعالج والكهرباء، وأوافق على الاتصال بمجمع التعدين عبر خادم المكتبة الوسيط، وأطلب بدء التعدين الآن.</label></div>
+    <div class="buttons"><button id="start" class="start" disabled>بدء التعدين الآن</button><button id="stop" class="stop" disabled>إيقاف التعدين</button></div>
+    <div id="status" class="status" role="status" aria-live="polite">متوقف — لم يبدأ أي تعدين.</div>
+    <footer>المجمع: <code dir="ltr">eu.rplant.xyz:17149</code> · TLS مفعّل · كلمة مرور العامل: <code dir="ltr">x</code>. لا نحفظ الموافقة بين الزيارات ولا نبدأ تلقائيًا عند العودة.</footer>
+  </section>
+</main>
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const hardware = Math.max(1, Number(navigator.hardwareConcurrency) || 1);
+  $('available').textContent = hardware;
+  $('threads').max = hardware;
+  $('threads').value = 1;
+  let miner = null;
+  let running = false;
+  const status = (text, cls = '') => { $('status').textContent = text; $('status').className = `status ${cls}`; };
+  const sync = () => { $('start').disabled = running || !$('agree').checked; $('stop').disabled = !running; };
+  $('agree').addEventListener('change', sync);
+  $('start').addEventListener('click', async () => {
+    if (running || !$('agree').checked) return;
+    const wallet = $('wallet').value.trim();
+    const threads = Number($('threads').value);
+    if (!wallet || !Number.isInteger(threads) || threads < 1 || threads > hardware) {
+      status(`أدخل عنوان محفظة صالحًا وعدد خيوط بين 1 و${hardware}.`, 'error'); return;
+    }
+    $('start').disabled = true;
+    status('جارٍ تحميل مكتبة التعدين بعد موافقتك…');
+    try {
+      miner = await import('https://esm.sh/@marco_ciaramella/cpu-web-miner@1.9.5');
+      const stratum = { server: 'eu.rplant.xyz', port: 17149, worker: wallet, password: 'x', ssl: true };
+      miner.start(miner.yespowerADVC, stratum, null, threads,
+        () => status('التعدين يعمل — يمكنك الإيقاف في أي وقت.', 'active'),
+        (rate) => status(`التعدين يعمل · المعدل: ${rate.hashrateKHs} KH/s · اضغط إيقاف للتوقف.`, 'active'),
+        (error) => status(`خطأ من خدمة التعدين: ${String(error?.error ?? error)}`, 'error'));
+      running = true;
+      status(`تم طلب بدء التعدين باستخدام ${threads} خيطًا. اضغط «إيقاف التعدين» للتوقف.`, 'active');
+    } catch (error) {
+      try { miner?.stop(); } catch {}
+      miner = null; running = false;
+      status(`تعذّر بدء التعدين: ${String(error?.message ?? error)}`, 'error');
+    }
+    sync();
+  });
+  $('stop').addEventListener('click', () => {
+    try { miner?.stop(); } catch {}
+    miner = null; running = false; status('متوقف — لن يُستأنف تلقائيًا.'); sync();
+  });
+  window.addEventListener('pagehide', () => { try { miner?.stop(); } catch {} });
+  sync();
+</script>
+</body>
+</html>
